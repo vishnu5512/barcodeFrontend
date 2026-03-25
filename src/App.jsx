@@ -13,7 +13,7 @@ function digitalTime(seconds) {
 function App() {
   const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
-  const [folderPath, setFolderPath] = useState("");
+  const [files, setFiles] = useState([]);
   const [pages, setPages] = useState("");
   const [status, setStatus] = useState("Status: Waiting for folder upload...");
   
@@ -32,18 +32,6 @@ function App() {
   useEffect(() => {
     document.title = "AUS | Examcell PDF Barcode Validator";
   }, []);
-
-  const handleSelectFolder = async () => {
-    try {
-        const res = await axios.get(`${API_BASE_URL}/select-folder`);
-        if (res.data.folderPath) {
-            setFolderPath(res.data.folderPath);
-            setStatus(`Status: Selected Folder Ready`);
-        }
-    } catch (err) {
-        alert("Could not open folder picker.");
-    }
-  };
 
   const startTimer = () => {
     startTimeRef.current = Date.now();
@@ -78,6 +66,9 @@ function App() {
         stopTimer();
         setIsProcessing(false);
         setStatus("Status: Process Cancelled ❌");
+        
+        // Attempt to download whatever report was created natively
+        window.location.href = `${API_BASE_URL}/download/${jobIdRef.current}`;
     }
   };
 
@@ -87,7 +78,7 @@ function App() {
       return;
     }
 
-    if (!folderPath) {
+    if (files.length === 0) {
       alert("Please select a folder first!");
       return;
     }
@@ -106,9 +97,22 @@ function App() {
     totalRef.current = 0;
     
     try {
-      setStatus("Status: Starting validation...");
-      const jobId = Date.now().toString();
+      setStatus("Status: Uploading folder to cloud server... Please wait.");
+      
+      const formData = new FormData();
+      for (let i = 0; i < files.length; i++) {
+        formData.append("files", files[i]);
+      }
+
+      const uploadRes = await axios.post(`${API_BASE_URL}/upload`, formData);
+      const jobId = uploadRes.data.jobId;
       jobIdRef.current = jobId;
+      
+      const total = uploadRes.data.totalFiles;
+      totalRef.current = total;
+      setTotalFiles(total);
+
+      setStatus("Status: Starting validation...");
 
       // Start SSE
       const eventSource = new EventSource(`${API_BASE_URL}/progress/${jobId}`);
@@ -126,12 +130,14 @@ function App() {
         } else if (data.type === 'done') {
           stopTimer();
           setIsProcessing(false);
-          setStatus(`Status: Completed ✅ | Total PDFs Processed: ${processedRef.current} of ${totalRef.current}`);
-          setRemainingTimer(0); // Show 00h 00m 00s remaining
+          setStatus(`Status: Completed ✅ | Downloading Report...`);
+          setRemainingTimer(0); 
           
+          window.location.href = `${API_BASE_URL}/download/${jobId}`;
+
           setTimeout(() => {
-              alert("Report Generated:\n" + data.report);
-          }, 100);
+              alert("Processing complete! Report is downloading onto your device.");
+          }, 500);
           eventSource.close();
         } else if (data.type === 'cancelled') {
           stopTimer();
@@ -150,7 +156,7 @@ function App() {
         console.error("SSE Error", e);
       };
 
-      await axios.post(`${API_BASE_URL}/start`, { jobId, folderPath, pages });
+      await axios.post(`${API_BASE_URL}/start`, { jobId, pages });
 
     } catch (err) {
       stopTimer();
@@ -167,12 +173,21 @@ function App() {
         
         <div className="title">Batch PDF Barcode Validator</div>
 
-        <button className="btn" onClick={handleSelectFolder}>
+        <input 
+          id="folder-input"
+          type="file" 
+          webkitdirectory="true" 
+          directory="true" 
+          multiple 
+          className="hidden-input"
+          onChange={(e) => setFiles(e.target.files)} 
+        />
+        <label htmlFor="folder-input" className="btn">
           Select Folder
-        </button>
+        </label>
         
         <div className="folder-status">
-          {folderPath ? `Selected Folder: ${folderPath.split(/[\\/]/).pop()} | Path: ${folderPath}` : "No folder selected"}
+          {files.length > 0 ? `Selected Folder: ${files[0].webkitRelativePath?.split('/')[0] || 'Unknown'} | Total PDFs: ${files.length}` : "No folder selected"}
         </div>
 
         <div className="label">Enter Expected Page Count:</div>
