@@ -11,6 +11,8 @@ function digitalTime(seconds) {
 }
 
 function App() {
+  const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
   const [folderPath, setFolderPath] = useState("");
   const [pages, setPages] = useState("");
   const [status, setStatus] = useState("Status: Waiting for folder upload...");
@@ -33,7 +35,7 @@ function App() {
 
   const handleSelectFolder = async () => {
     try {
-        const res = await axios.get("http://localhost:5000/select-folder");
+        const res = await axios.get(`${API_BASE_URL}/select-folder`);
         if (res.data.folderPath) {
             setFolderPath(res.data.folderPath);
             setStatus(`Status: Selected Folder Ready`);
@@ -72,7 +74,7 @@ function App() {
   const handleCancel = async () => {
     if (jobIdRef.current) {
         setStatus("Status: Cancelling... ❌");
-        await axios.post("http://localhost:5000/cancel", { jobId: jobIdRef.current });
+        await axios.post(`${API_BASE_URL}/cancel`, { jobId: jobIdRef.current });
         stopTimer();
         setIsProcessing(false);
         setStatus("Status: Process Cancelled ❌");
@@ -109,7 +111,7 @@ function App() {
       jobIdRef.current = jobId;
 
       // Start SSE
-      const eventSource = new EventSource(`http://localhost:5000/progress/${jobId}`);
+      const eventSource = new EventSource(`${API_BASE_URL}/progress/${jobId}`);
       
       eventSource.onmessage = (e) => {
         const data = JSON.parse(e.data);
@@ -148,7 +150,7 @@ function App() {
         console.error("SSE Error", e);
       };
 
-      await axios.post("http://localhost:5000/start", { jobId, folderPath, pages });
+      await axios.post(`${API_BASE_URL}/start`, { jobId, folderPath, pages });
 
     } catch (err) {
       stopTimer();
