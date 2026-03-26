@@ -16,16 +16,16 @@ function App() {
   const [files, setFiles] = useState([]);
   const [pages, setPages] = useState("");
   const [status, setStatus] = useState("Status: Waiting for folder upload...");
-  
+
   const [isProcessing, setIsProcessing] = useState(false);
   const [elapsedTimer, setElapsedTimer] = useState(0);
   const [remainingTimer, setRemainingTimer] = useState(0);
   const [processedCount, setProcessedCount] = useState(0);
   const [totalFiles, setTotalFiles] = useState(0);
-  
+
   const jobIdRef = useRef(null);
   const timerRef = useRef(null);
-  const startTimeRef = useRef(null);
+  const startTimeRef = useRef(null)
   const processedRef = useRef(0);
   const totalRef = useRef(0);
 
@@ -38,10 +38,10 @@ function App() {
     timerRef.current = setInterval(() => {
       const elapsed = (Date.now() - startTimeRef.current) / 1000;
       setElapsedTimer(elapsed);
-      
+
       const currentProcessed = processedRef.current;
       const currentTotal = totalRef.current;
-      
+
       if (currentProcessed > 0) {
         const avg = elapsed / currentProcessed;
         const remaining = avg * (currentTotal - currentProcessed);
@@ -61,14 +61,14 @@ function App() {
 
   const handleCancel = async () => {
     if (jobIdRef.current) {
-        setStatus("Status: Cancelling... ❌");
-        await axios.post(`${API_BASE_URL}/cancel`, { jobId: jobIdRef.current });
-        stopTimer();
-        setIsProcessing(false);
-        setStatus("Status: Process Cancelled ❌");
-        
-        // Attempt to download whatever report was created natively
-        window.location.href = `${API_BASE_URL}/download/${jobIdRef.current}`;
+      setStatus("Status: Cancelling... ❌");
+      await axios.post(`${API_BASE_URL}/cancel`, { jobId: jobIdRef.current });
+      stopTimer();
+      setIsProcessing(false);
+      setStatus("Status: Process Cancelled ❌");
+
+      // Attempt to download whatever report was created natively
+      window.location.href = `${API_BASE_URL}/download/${jobIdRef.current}`;
     }
   };
 
@@ -82,7 +82,7 @@ function App() {
       alert("Please select a folder first!");
       return;
     }
-    
+
     if (!pages) {
       alert("Enter valid expected page count!");
       return;
@@ -95,10 +95,10 @@ function App() {
     setTotalFiles(0);
     processedRef.current = 0;
     totalRef.current = 0;
-    
+
     try {
       setStatus("Status: Uploading folder to cloud server... Please wait.");
-      
+
       const formData = new FormData();
       for (let i = 0; i < files.length; i++) {
         formData.append("files", files[i]);
@@ -107,7 +107,7 @@ function App() {
       const uploadRes = await axios.post(`${API_BASE_URL}/upload`, formData);
       const jobId = uploadRes.data.jobId;
       jobIdRef.current = jobId;
-      
+
       const total = uploadRes.data.totalFiles;
       totalRef.current = total;
       setTotalFiles(total);
@@ -116,13 +116,13 @@ function App() {
 
       // Start SSE
       const eventSource = new EventSource(`${API_BASE_URL}/progress/${jobId}`);
-      
+
       eventSource.onmessage = (e) => {
         const data = JSON.parse(e.data);
         if (data.type === 'total') {
-            totalRef.current = data.total;
-            setTotalFiles(data.total);
-            startTimer();
+          totalRef.current = data.total;
+          setTotalFiles(data.total);
+          startTimer();
         } else if (data.type === 'processed') {
           processedRef.current += 1;
           setProcessedCount(processedRef.current);
@@ -131,12 +131,12 @@ function App() {
           stopTimer();
           setIsProcessing(false);
           setStatus(`Status: Completed ✅ | Downloading Report...`);
-          setRemainingTimer(0); 
-          
+          setRemainingTimer(0);
+
           window.location.href = `${API_BASE_URL}/download/${jobId}`;
 
           setTimeout(() => {
-              alert("Processing complete! Report is downloading onto your device.");
+            alert("Processing complete! Report is downloading onto your device.");
           }, 500);
           eventSource.close();
         } else if (data.type === 'cancelled') {
@@ -170,22 +170,22 @@ function App() {
     <div className="container" style={{ fontFamily: "Segoe UI, Tahoma, Geneva, Verdana, sans-serif", backgroundColor: "#ffffff" }}>
       <div className="main-content">
         <img src="/logo.png" alt="Aditya University Logo" className="logo" onError={(e) => e.target.style.display = 'none'} />
-        
+
         <div className="title">Batch PDF Barcode Validator</div>
 
-        <input 
+        <input
           id="folder-input"
-          type="file" 
-          webkitdirectory="true" 
-          directory="true" 
-          multiple 
+          type="file"
+          webkitdirectory="true"
+          directory="true"
+          multiple
           className="hidden-input"
-          onChange={(e) => setFiles(e.target.files)} 
+          onChange={(e) => setFiles(e.target.files)}
         />
         <label htmlFor="folder-input" className="btn">
           Select Folder
         </label>
-        
+
         <div className="folder-status">
           {files.length > 0 ? `Selected Folder: ${files[0].webkitRelativePath?.split('/')[0] || 'Unknown'} | Total PDFs: ${files.length}` : "No folder selected"}
         </div>
@@ -198,8 +198,8 @@ function App() {
           onChange={(e) => setPages(e.target.value)}
         />
 
-        <button 
-          className="btn submit-btn" 
+        <button
+          className="btn submit-btn"
           style={{ backgroundColor: isProcessing ? "red" : "#004883" }}
           onClick={handleSubmit}
         >
