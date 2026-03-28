@@ -97,7 +97,7 @@ function App() {
     totalRef.current = 0;
 
     try {
-      setStatus("Status: Uploading folder to cloud server... Please wait.");
+      setStatus("Status: Uploading folder to cloud server... Please wait. (It may take up to 50s to wake the server)");
 
       const formData = new FormData();
       for (let i = 0; i < files.length; i++) {
