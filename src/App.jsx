@@ -165,8 +165,7 @@ function App() {
   return (
     <div className="container" style={{ fontFamily: "Segoe UI, Tahoma, Geneva, Verdana, sans-serif", backgroundColor: "#ffffff" }}>
       <div className="main-content">
-        <img src="/logo.png" alt="Aditya University Logo" className="logo" onError={(e) => e.target.style.display = 'none'} />
-
+        {/* Removed logo to resolve 404 error */}
         <div className="title">Batch PDF Barcode Validator</div>
 
         {window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" ? (
