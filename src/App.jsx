@@ -13,71 +13,64 @@ function digitalTime(seconds) {/
 function App() {
   const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
+  const [localPath, setLocalPath] = useState("");
   const [files, setFiles] = useState([]);
-  const [pages, setPages] = useState("");
-  const [status, setStatus] = useState("Status: Waiting for folder upload...");
-
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [elapsedTimer, setElapsedTimer] = useState(0);
-  const [remainingTimer, setRemainingTimer] = useState(0);
-  const [processedCount, setProcessedCount] = useState(0);
-  const [totalFiles, setTotalFiles] = useState(0);
-
-  const jobIdRef = useRef(null);
-  const timerRef = useRef(null);
-  const startTimeRef = useRef(null)
-  const processedRef = useRef(0);
-  const totalRef = useRef(0);
+  const [pages, setPages] = useState("36");
+  const [jobs, setJobs] = useState([]); // Array of job objects
+  
+  const timerRefs = useRef({}); // Store intervals for each jobId
+  const startTimeRefs = useRef({}); 
 
   useEffect(() => {
     document.title = "AUS | Examcell PDF Barcode Validator";
   }, []);
 
-  const startTimer = () => {
-    startTimeRef.current = Date.now();
-    timerRef.current = setInterval(() => {
-      const elapsed = (Date.now() - startTimeRef.current) / 1000;
-      setElapsedTimer(elapsed);
+  const updateJob = (id, updates) => {
+    setJobs(prev => prev.map(job => job.id === id ? { ...job, ...updates } : job));
+  };
 
-      const currentProcessed = processedRef.current;
-      const currentTotal = totalRef.current;
-
-      if (currentProcessed > 0) {
-        const avg = elapsed / currentProcessed;
-        const remaining = avg * (currentTotal - currentProcessed);
-        setRemainingTimer(remaining);
-      } else {
-        setRemainingTimer(0);
-      }
+  const startTimer = (id) => {
+    startTimeRefs.current[id] = Date.now();
+    timerRefs.current[id] = setInterval(() => {
+      const elapsed = (Date.now() - startTimeRefs.current[id]) / 1000;
+      
+      setJobs(prev => prev.map(job => {
+        if (job.id === id) {
+          const avg = job.processed > 0 ? elapsed / job.processed : 0;
+          const remaining = avg * (job.total - job.processed);
+          return { ...job, elapsed, remaining };
+        }
+        return job;
+      }));
     }, 1000);
   };
 
-  const stopTimer = () => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
+  const stopTimer = (id) => {
+    if (timerRefs.current[id]) {
+      clearInterval(timerRefs.current[id]);
+      delete timerRefs.current[id];
     }
   };
 
-  const handleCancel = async () => {
-    if (jobIdRef.current) {
-      setStatus("Status: Cancelling... ❌");
-      await axios.post(`${API_BASE_URL}/cancel`, { jobId: jobIdRef.current });
-      stopTimer();
-      setIsProcessing(false);
-      setStatus("Status: Process Cancelled ❌");
+  const handleCancel = async (jobId) => {
+    updateJob(jobId, { status: "Status: Cancelling... ❌" });
+    await axios.post(`${API_BASE_URL}/cancel`, { jobId });
+    stopTimer(jobId);
+    updateJob(jobId, { status: "Status: Process Cancelled ❌", processing: false });
+  };
 
-      // Attempt to download whatever report was created natively
-      window.location.href = `${API_BASE_URL}/download/${jobIdRef.current}`;
+  const handlePickLocalFolder = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/local-pick`);
+      setLocalPath(res.data.folderPath);
+      setFiles([]); // Clear browser-selected files to avoid confusion
+    } catch (err) {
+      alert("Error picking folder: " + err.message);
     }
   };
 
   const handleSubmit = async () => {
-    if (isProcessing) {
-      return;
-    }
-
-    if (files.length === 0) {
+    if (files.length === 0 && !localPath) {
       alert("Please select a folder first!");
       return;
     }
@@ -87,73 +80,78 @@ function App() {
       return;
     }
 
-    setIsProcessing(true);
-    setElapsedTimer(0);
-    setRemainingTimer(0);
-    setProcessedCount(0);
-    setTotalFiles(0);
-    processedRef.current = 0;
-    totalRef.current = 0;
+    const newJobId = localPath ? "local_" + Date.now() : "upload_" + Date.now();
+    const newJob = {
+      id: newJobId,
+      name: localPath ? localPath.split(/[\\/]/).pop() : files[0].webkitRelativePath?.split('/')[0] || "Upload",
+      status: "Status: Initializing...",
+      processed: 0,
+      total: 0,
+      elapsed: 0,
+      remaining: 0,
+      localPath: localPath,
+      processing: true
+    };
+
+    setJobs(prev => [newJob, ...prev]);
 
     try {
-      setStatus("Status: Waking up cloud server... (takes up to 50s)");
+      let finalJobId = newJobId;
+      
+      updateJob(newJobId, { status: "Status: Waking up cloud server... (takes up to 50s)" });
       try {
         await axios.get(`${API_BASE_URL}/ping`, { timeout: 120000 });
       } catch (e) {
         console.warn("Server wakeup ping failed or timed out. Proceeding anyway...", e);
       }
 
-      setStatus("Status: Uploading folder...");
+      if (!localPath) {
+        updateJob(newJobId, { status: "Status: Uploading folder..." });
 
-      const formData = new FormData();
-      for (let i = 0; i < files.length; i++) {
-        formData.append("files", files[i]);
+        const formData = new FormData();
+        for (let i = 0; i < files.length; i++) {
+          formData.append("files", files[i]);
+        }
+
+        const uploadRes = await axios.post(`${API_BASE_URL}/upload`, formData);
+        finalJobId = uploadRes.data.jobId;
+        const total = uploadRes.data.totalFiles;
+        updateJob(newJobId, { id: finalJobId, total });
+      } else {
+        updateJob(newJobId, { status: "Status: Using local folder path..." });
       }
 
-      const uploadRes = await axios.post(`${API_BASE_URL}/upload`, formData);
-      const jobId = uploadRes.data.jobId;
-      jobIdRef.current = jobId;
-
-      const total = uploadRes.data.totalFiles;
-      totalRef.current = total;
-      setTotalFiles(total);
-
-      setStatus("Status: Starting validation...");
+      const activeJobId = finalJobId;
 
       // Start SSE
-      const eventSource = new EventSource(`${API_BASE_URL}/progress/${jobId}`);
+      const eventSource = new EventSource(`${API_BASE_URL}/progress/${activeJobId}`);
 
       eventSource.onmessage = (e) => {
         const data = JSON.parse(e.data);
         if (data.type === 'total') {
-          totalRef.current = data.total;
-          setTotalFiles(data.total);
-          startTimer();
+          updateJob(newJobId, { total: data.total });
+          startTimer(newJobId);
         } else if (data.type === 'processed') {
-          processedRef.current += 1;
-          setProcessedCount(processedRef.current);
-          setStatus(`Status: Processing ${processedRef.current}/${totalRef.current} : ${data.file}`);
+          setJobs(prev => prev.map(job => 
+            job.id === newJobId || job.id === finalJobId 
+            ? { ...job, processed: job.processed + 1, status: `Status: Processing ${job.processed + 1}/${job.total} : ${data.file}` } 
+            : job
+          ));
         } else if (data.type === 'done') {
-          stopTimer();
-          setIsProcessing(false);
-          setStatus(`Status: Completed ✅ | Downloading Report...`);
-          setRemainingTimer(0);
+          stopTimer(newJobId);
+          updateJob(newJobId, { status: `Status: Completed ✅`, processing: false, remaining: 0 });
 
-          window.location.href = `${API_BASE_URL}/download/${jobId}`;
-
-          setTimeout(() => {
-            alert("Processing complete! Report is downloading onto your device.");
-          }, 500);
+          if (!localPath) {
+            window.location.href = `${API_BASE_URL}/download/${activeJobId}`;
+          }
           eventSource.close();
         } else if (data.type === 'cancelled') {
-          stopTimer();
-          setIsProcessing(false);
-          setStatus("Status: Process Cancelled ❌");
+          stopTimer(newJobId);
+          updateJob(newJobId, { status: "Status: Process Cancelled ❌", processing: false });
           eventSource.close();
         } else if (data.type === 'error') {
-          stopTimer();
-          setIsProcessing(false);
-          setStatus("Status: Error - " + data.message);
+          stopTimer(newJobId);
+          updateJob(newJobId, { status: "Status: Error - " + data.message, processing: false });
           eventSource.close();
         }
       };
@@ -162,12 +160,11 @@ function App() {
         console.error("SSE Error", e);
       };
 
-      await axios.post(`${API_BASE_URL}/start`, { jobId, pages });
+      await axios.post(`${API_BASE_URL}/start`, { jobId: activeJobId, pages, localPath });
 
     } catch (err) {
-      stopTimer();
-      setIsProcessing(false);
-      setStatus("Status: Error - " + err.message);
+      stopTimer(newJobId);
+      updateJob(newJobId, { status: "Status: Error - " + err.message, processing: false });
       alert("Error: " + err.message);
     }
   };
@@ -175,26 +172,40 @@ function App() {
   return (
     <div className="container" style={{ fontFamily: "Segoe UI, Tahoma, Geneva, Verdana, sans-serif", backgroundColor: "#ffffff" }}>
       <div className="main-content">
-        <img src="/logo.png" alt="Aditya University Logo" className="logo" onError={(e) => e.target.style.display = 'none'} />
-
+        {/* Removed logo to resolve 404 error */}
         <div className="title">Batch PDF Barcode Validator</div>
 
-        <input
-          id="folder-input"
-          type="file"
-          webkitdirectory="true"
-          directory="true"
-          multiple
-          className="hidden-input"
-          onChange={(e) => setFiles(e.target.files)}
-        />
-        <label htmlFor="folder-input" className="btn">
-          Select Folder to Upload
-        </label>
-
-        <div className="folder-status">
-          {files.length > 0 ? `Selected Folder: ${files[0].webkitRelativePath?.split('/')[0] || 'Unknown'} | Total PDFs: ${files.length}` : "No folder selected"}
-        </div>
+        {window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" ? (
+          <>
+            <div className="folder-status">
+              {localPath ? `📂 Selected Local Folder: ${localPath}` : "No local folder selected"}
+            </div>
+            <button className="btn" style={{ backgroundColor: "#004883", marginBottom: "10px" }} onClick={handlePickLocalFolder}>
+              Select Local Folder
+            </button>
+          </>
+        ) : (
+          <>
+            <input
+              id="folder-input"
+              type="file"
+              webkitdirectory="true"
+              directory="true"
+              multiple
+              className="hidden-input"
+              onChange={(e) => {
+                setFiles(e.target.files);
+                setLocalPath(""); // Clear local path if using browser upload
+              }}
+            />
+            <label htmlFor="folder-input" className="btn">
+              Select Folder to Upload
+            </label>
+            <div className="folder-status">
+              {files.length > 0 ? `Selected Folder: ${files[0].webkitRelativePath?.split('/')[0] || 'Unknown'} | Total PDFs: ${files.length}` : "No folder selected"}
+            </div>
+          </>
+        )}
 
         <div className="label">Enter Expected Page Count:</div>
         <input
@@ -206,46 +217,42 @@ function App() {
 
         <button
           className="btn submit-btn"
-          style={{ backgroundColor: isProcessing ? "#cccccc" : "#004883", cursor: isProcessing ? "not-allowed" : "pointer" }}
+          style={{ backgroundColor: "#004883", cursor: "pointer" }}
           onClick={handleSubmit}
-          disabled={isProcessing}
         >
           Add to Queue
         </button>
 
-        <hr className="divider" />
+        {jobs.length > 0 && (
+          <div className="jobs-container">
+            <div className="section-title">Job Queue</div>
+            {jobs.map(job => (
+              <div key={job.id} className="job-card">
+                <div className="job-header">
+                  <span className="job-name">{job.name}</span>
+                  <span className="job-status-text">{job.status}</span>
+                </div>
+                
+                <div className="progress-bar-container">
+                  <div 
+                    className="progress-bar-fill" 
+                    style={{ width: `${job.total > 0 ? (job.processed / job.total) * 100 : 0}%` }}
+                  ></div>
+                </div>
 
-        <div className="job-queue-section">
-          <div className="job-queue-heading">Job Queue</div>
+                <div className="job-stats">
+                  <span>Processed: {job.processed} / {job.total}</span>
+                  <span>Elapsed: {digitalTime(job.elapsed)}</span>
+                  <span>Remaining: {digitalTime(job.remaining)}</span>
+                </div>
 
-          {(isProcessing || status !== "Status: Waiting for folder upload...") && (
-            <div className="job-card">
-              <div className="job-card-header">
-                <span className="job-card-title">{files.length > 0 ? (files[0].webkitRelativePath?.split('/')[0] || 'Unknown') : 'Unknown'}</span>
-                <span className="job-card-status">{status}</span>
+                {job.processing && (
+                  <button className="cancel-small" onClick={() => handleCancel(job.id)}>Cancel</button>
+                )}
               </div>
-
-              <div className="progress-bar-container">
-                <div
-                  className="progress-bar-fill"
-                  style={{ width: `${totalFiles > 0 ? (processedCount / totalFiles) * 100 : 0}%` }}
-                ></div>
-              </div>
-
-              <div className="job-card-stats">
-                <span>Processed: {processedCount} / {totalFiles > 0 ? totalFiles : (files.length || 0)}</span>
-                <span>Elapsed: {digitalTime(elapsedTimer)}</span>
-                <span>Remaining: {digitalTime(remainingTimer)}</span>
-              </div>
-
-              {isProcessing && (
-                <button className="cancel-btn" onClick={handleCancel}>
-                  Cancel
-                </button>
-              )}
-            </div>
-          )}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="footer">
