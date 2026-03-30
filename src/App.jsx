@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import "./App.css";
 
-function digitalTime(seconds) {
+function digitalTime(seconds) {/
   if (isNaN(seconds) || seconds < 0) return "00h 00m 00s";
   const hrs = Math.floor(seconds / 3600);
   const mins = Math.floor((seconds % 3600) / 60);
@@ -74,7 +74,6 @@ function App() {
 
   const handleSubmit = async () => {
     if (isProcessing) {
-      handleCancel();
       return;
     }
 
@@ -97,7 +96,14 @@ function App() {
     totalRef.current = 0;
 
     try {
-      setStatus("Status: Uploading folder to cloud server... Please wait. (It may take up to 50s to wake the server)");
+      setStatus("Status: Waking up cloud server... (takes up to 50s)");
+      try {
+        await axios.get(`${API_BASE_URL}/ping`, { timeout: 120000 });
+      } catch (e) {
+        console.warn("Server wakeup ping failed or timed out. Proceeding anyway...", e);
+      }
+
+      setStatus("Status: Uploading folder...");
 
       const formData = new FormData();
       for (let i = 0; i < files.length; i++) {
@@ -183,7 +189,7 @@ function App() {
           onChange={(e) => setFiles(e.target.files)}
         />
         <label htmlFor="folder-input" className="btn">
-          Select Folder
+          Select Folder to Upload
         </label>
 
         <div className="folder-status">
@@ -200,15 +206,46 @@ function App() {
 
         <button
           className="btn submit-btn"
-          style={{ backgroundColor: isProcessing ? "red" : "#004883" }}
+          style={{ backgroundColor: isProcessing ? "#cccccc" : "#004883", cursor: isProcessing ? "not-allowed" : "pointer" }}
           onClick={handleSubmit}
+          disabled={isProcessing}
         >
-          {isProcessing ? "Cancel" : "Submit"}
+          Add to Queue
         </button>
 
-        <div className="status-blue">{status}</div>
-        <div className="status-green">Completed: {digitalTime(elapsedTimer)}</div>
-        <div className="status-green">Remaining: {digitalTime(remainingTimer)}</div>
+        <hr className="divider" />
+
+        <div className="job-queue-section">
+          <div className="job-queue-heading">Job Queue</div>
+
+          {(isProcessing || status !== "Status: Waiting for folder upload...") && (
+            <div className="job-card">
+              <div className="job-card-header">
+                <span className="job-card-title">{files.length > 0 ? (files[0].webkitRelativePath?.split('/')[0] || 'Unknown') : 'Unknown'}</span>
+                <span className="job-card-status">{status}</span>
+              </div>
+
+              <div className="progress-bar-container">
+                <div
+                  className="progress-bar-fill"
+                  style={{ width: `${totalFiles > 0 ? (processedCount / totalFiles) * 100 : 0}%` }}
+                ></div>
+              </div>
+
+              <div className="job-card-stats">
+                <span>Processed: {processedCount} / {totalFiles > 0 ? totalFiles : (files.length || 0)}</span>
+                <span>Elapsed: {digitalTime(elapsedTimer)}</span>
+                <span>Remaining: {digitalTime(remainingTimer)}</span>
+              </div>
+
+              {isProcessing && (
+                <button className="cancel-btn" onClick={handleCancel}>
+                  Cancel
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="footer">
