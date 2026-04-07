@@ -70,6 +70,8 @@ function App() {
   };
 
   const handleSubmit = async () => {
+    console.log("Submitting job with files:", files.length, "and pages:", pages);
+
     if (files.length === 0 && !localPath) {
       alert("Please select a folder first!");
       return;
@@ -163,9 +165,11 @@ function App() {
       await axios.post(`${API_BASE_URL}/start`, { jobId: activeJobId, pages, localPath });
 
     } catch (err) {
+      console.error("Critical submission error:", err);
       stopTimer(newJobId);
-      updateJob(newJobId, { status: "Status: Error - " + err.message, processing: false });
-      alert("Error: " + err.message);
+      const msg = err.response?.data?.error || err.message;
+      updateJob(newJobId, { status: "Status: Error - " + msg, processing: false });
+      alert("Uh oh! We hit an error connecting to the server: " + msg);
     }
   };
 
@@ -223,8 +227,10 @@ function App() {
           </>
         )}
 
-        <div className="label">Enter Expected Page Count:</div>
+        <div className="label" htmlFor="page-count">Enter Expected Page Count:</div>
         <input
+          id="page-count"
+          name="pages"
           type="number"
           className="input-box"
           value={pages}

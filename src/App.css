@@ -85,17 +85,20 @@
 
 /* Multi-Job Queue Styles */
 .jobs-container {
-  margin-top: 30px;
+  width: 100%;
+  margin-top: 40px;
   text-align: left;
-  border-top: 2px solid #eee;
+  border-top: 2px solid #004883;
   padding-top: 20px;
+  padding-bottom: 50px; /* Space for footer */
 }
 
 .section-title {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: bold;
   color: #004883;
-  margin-bottom: 15px;
+  margin-bottom: 20px;
+  text-align: center;
 }
 
 .job-card {
