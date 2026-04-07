@@ -18,13 +18,23 @@ function App() {
   const [files, setFiles] = useState([]);
   const [pages, setPages] = useState("36");
   const [jobs, setJobs] = useState([]); // Array of job objects
+  const [backendStatus, setBackendStatus] = useState("Checking..."); 
 
   const timerRefs = useRef({}); // Store intervals for each jobId
   const startTimeRefs = useRef({});
 
   useEffect(() => {
+    const checkBackend = async () => {
+      try {
+        await axios.get(`${API_BASE_URL}/ping`);
+        setBackendStatus("Online");
+      } catch (e) {
+        setBackendStatus("Offline / Sleeping");
+      }
+    };
+    checkBackend();
     document.title = "AUS | Examcell PDF Barcode Validator";
-  }, []);
+  }, [API_BASE_URL]);
 
   const updateJob = (id, updates) => {
     setJobs(prev => prev.map(job => job.id === id ? { ...job, ...updates } : job));
@@ -195,6 +205,10 @@ function App() {
       <div className="main-content">
         {/* Removed logo to resolve 404 error */}
         <div className="title">Batch PDF Barcode Validator</div>
+        
+        <div style={{ fontSize: "12px", marginBottom: "20px", color: backendStatus === "Online" ? "green" : "red" }}>
+          Server Status: <strong>{backendStatus}</strong>
+        </div>
 
         {window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" ? (
           <>
