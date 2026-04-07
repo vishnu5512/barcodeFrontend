@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import "./App.css";
 
-function digitalTime(seconds) {/
+function digitalTime(seconds) {
   if (isNaN(seconds) || seconds < 0) return "00h 00m 00s";
   const hrs = Math.floor(seconds / 3600);
   const mins = Math.floor((seconds % 3600) / 60);
@@ -17,9 +17,9 @@ function App() {
   const [files, setFiles] = useState([]);
   const [pages, setPages] = useState("36");
   const [jobs, setJobs] = useState([]); // Array of job objects
-  
+
   const timerRefs = useRef({}); // Store intervals for each jobId
-  const startTimeRefs = useRef({}); 
+  const startTimeRefs = useRef({});
 
   useEffect(() => {
     document.title = "AUS | Examcell PDF Barcode Validator";
@@ -33,7 +33,7 @@ function App() {
     startTimeRefs.current[id] = Date.now();
     timerRefs.current[id] = setInterval(() => {
       const elapsed = (Date.now() - startTimeRefs.current[id]) / 1000;
-      
+
       setJobs(prev => prev.map(job => {
         if (job.id === id) {
           const avg = job.processed > 0 ? elapsed / job.processed : 0;
@@ -97,7 +97,7 @@ function App() {
 
     try {
       let finalJobId = newJobId;
-      
+
       updateJob(newJobId, { status: "Status: Waking up cloud server... (takes up to 50s)" });
       try {
         await axios.get(`${API_BASE_URL}/ping`, { timeout: 120000 });
@@ -132,10 +132,10 @@ function App() {
           updateJob(newJobId, { total: data.total });
           startTimer(newJobId);
         } else if (data.type === 'processed') {
-          setJobs(prev => prev.map(job => 
-            job.id === newJobId || job.id === finalJobId 
-            ? { ...job, processed: job.processed + 1, status: `Status: Processing ${job.processed + 1}/${job.total} : ${data.file}` } 
-            : job
+          setJobs(prev => prev.map(job =>
+            job.id === newJobId || job.id === finalJobId
+              ? { ...job, processed: job.processed + 1, status: `Status: Processing ${job.processed + 1}/${job.total} : ${data.file}` }
+              : job
           ));
         } else if (data.type === 'done') {
           stopTimer(newJobId);
@@ -168,6 +168,22 @@ function App() {
       alert("Error: " + err.message);
     }
   };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   return (
     <div className="container" style={{ fontFamily: "Segoe UI, Tahoma, Geneva, Verdana, sans-serif", backgroundColor: "#ffffff" }}>
@@ -232,10 +248,10 @@ function App() {
                   <span className="job-name">{job.name}</span>
                   <span className="job-status-text">{job.status}</span>
                 </div>
-                
+
                 <div className="progress-bar-container">
-                  <div 
-                    className="progress-bar-fill" 
+                  <div
+                    className="progress-bar-fill"
                     style={{ width: `${job.total > 0 ? (job.processed / job.total) * 100 : 0}%` }}
                   ></div>
                 </div>
